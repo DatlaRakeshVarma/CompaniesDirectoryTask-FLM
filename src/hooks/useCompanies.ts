@@ -8,7 +8,8 @@ export function useCompanies() {
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const isFilteringRef = useRef(false);
+  const isFirstRender = useRef(true);
+  const shouldResetPageRef = useRef(false);
 
   const [filters, setFilters] = useState<CompanyFilters>({
     search: '',
@@ -38,14 +39,20 @@ export function useCompanies() {
   const [locations] = useState<string[]>(() => companyService.getUniqueLocations());
   const [revenueRanges] = useState<string[]>(() => companyService.getUniqueRevenueRanges());
 
+  // Debounce filters - skip on initial render to avoid double fetch
   useEffect(() => {
-    isFilteringRef.current = true;
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
     const handler = setTimeout(() => {
       setDebouncedFilters(filters);
-      setPagination((prev) => ({ ...prev, page: 1 }));
-      setTimeout(() => {
-        isFilteringRef.current = false;
-      }, 100);
+      // Reset page when filters change
+      if (shouldResetPageRef.current) {
+        setPagination((prev) => ({ ...prev, page: 1 }));
+        shouldResetPageRef.current = false;
+      }
     }, 300);
 
     return () => {
@@ -73,11 +80,13 @@ export function useCompanies() {
     }
   }, [debouncedFilters, sort, pagination]);
 
+  // Fetch companies when dependencies change
   useEffect(() => {
     fetchCompanies();
-  }, [fetchCompanies]);
+  }, [debouncedFilters, sort, pagination]);
 
   const handleFilterChange = (newFilters: CompanyFilters) => {
+    shouldResetPageRef.current = true;
     setFilters(newFilters);
   };
 
